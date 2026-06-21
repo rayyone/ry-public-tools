@@ -89,7 +89,19 @@ curl -fsSL https://raw.githubusercontent.com/rayyone/ry-public-tools/main/instal
 
 Then, in Claude Code, run `/decision-profile interview` to build your profile.
 
-Check what's installed, or remove the hooks (your data is kept):
+On macOS, install also schedules a **daily backup** (launchd, 03:00) of your
+profile, logs, and domain shards to `~/.ry-decision-profile-backup/` — outside
+`~/.claude` and any git repo, so it survives uninstall and is never committed.
+It runs silently; output is appended to `~/.ry-decision-profile-backup/sync.log`.
+Back up or restore on demand:
+
+```bash
+~/.claude/decision-profile/sync-decisions.sh backup
+~/.claude/decision-profile/sync-decisions.sh restore
+```
+
+Check what's installed, or remove the hooks and the backup agent (your data and
+existing backups are kept):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/rayyone/ry-public-tools/main/install.sh | bash -s -- decision-profile status

@@ -37,10 +37,19 @@ STATE_DIR="$CLAUDE_DIR/decision-profile"
 DOMAINS_DIR="$STATE_DIR/domains"
 STATE_FILES=(user-manual-decided-log.md interviewed-questions-log.md low-confident-answers-log.md)
 
+# Daily-backup (launchd) paths. Backups live outside ~/.claude so they survive
+# an uninstall and are never near any git repo.
+BACKUP_DIR="$HOME_DIR/.ry-decision-profile-backup"
+LAUNCH_AGENTS_DIR="$HOME_DIR/Library/LaunchAgents"
+PLIST_NAME="com.rayyone.decision-profile-backup"
+PLIST_DEST="$LAUNCH_AGENTS_DIR/$PLIST_NAME.plist"
+
 # Template files this installer needs (paths relative to templates/).
 SKILL_FILES=(SKILL.md auto-answer/SKILL.md)
 HOOK_FILES=(gate.sh session-check.sh post-ask.sh split-profile.sh sync-index.sh)
 SCAFFOLD_FILES=(user-decisions-table.md "${STATE_FILES[@]}")
+# Backup scripts (installed into STATE_DIR) + the launchd plist.
+BACKUP_FILES=(sync-decisions.sh daily-backup.sh "$PLIST_NAME.plist")
 
 # ---------------------------------------------------------------------------
 # Output helpers
@@ -75,7 +84,7 @@ resolve_templates() {
   TPL="$TMP_TPL/templates"
   log "${BOLD}==>${RESET} Downloading templates from $TOOL_RAW/templates"
   local rel
-  for rel in "${SKILL_FILES[@]}" "${HOOK_FILES[@]/#/hooks/}" "${SCAFFOLD_FILES[@]}"; do
+  for rel in "${SKILL_FILES[@]}" "${HOOK_FILES[@]/#/hooks/}" "${SCAFFOLD_FILES[@]}" "${BACKUP_FILES[@]}"; do
     mkdir -p "$TPL/$(dirname "$rel")"
     if ! curl -fsSL "$TOOL_RAW/templates/$rel" -o "$TPL/$rel"; then
       fail "Failed to download templates/$rel"
@@ -176,6 +185,51 @@ PY
 }
 
 # ---------------------------------------------------------------------------
+# Daily-backup (launchd) — macOS only. Installs the backup scripts into STATE_DIR
+# and a launchd agent that runs `sync-decisions.sh backup` daily at 03:00, silently
+# (output appended to $BACKUP_DIR/sync.log). Idempotent: re-bootstraps each run.
+# ---------------------------------------------------------------------------
+install_daily_backup() {
+  if [[ "$(uname -s)" != "Darwin" ]]; then
+    skip "daily backup uses launchd (macOS only) — skipped on $(uname -s)"
+    return
+  fi
+
+  # Backup scripts live alongside the profile data.
+  copy_force "sync-decisions.sh" "$STATE_DIR/sync-decisions.sh"
+  copy_force "daily-backup.sh"   "$STATE_DIR/daily-backup.sh"
+  chmod 755 "$STATE_DIR/sync-decisions.sh" "$STATE_DIR/daily-backup.sh"
+  ok "backup scripts → $STATE_DIR/"
+
+  mkdir -p "$BACKUP_DIR" "$LAUNCH_AGENTS_DIR"
+
+  # launchd does not expand ~ or env vars — bake the real $HOME into the plist.
+  sed "s#HOME_PLACEHOLDER#$HOME_DIR#g" "$TPL/$PLIST_NAME.plist" > "$PLIST_DEST"
+
+  # (Re)load the agent. bootout clears any stale copy; bootstrap (re)loads.
+  if have launchctl; then
+    local domain="gui/$(id -u)"
+    launchctl bootout "$domain/$PLIST_NAME" >/dev/null 2>&1 || true
+    if launchctl bootstrap "$domain" "$PLIST_DEST" >/dev/null 2>&1; then
+      ok "daily backup scheduled (launchd, 03:00) → $PLIST_DEST"
+    else
+      fail "could not load launchd agent — load it manually: launchctl bootstrap $domain \"$PLIST_DEST\""
+    fi
+  else
+    skip "launchctl not found — plist written to $PLIST_DEST but not loaded"
+  fi
+}
+
+remove_daily_backup() {
+  [[ "$(uname -s)" == "Darwin" ]] || return 0
+  if have launchctl; then
+    launchctl bootout "gui/$(id -u)/$PLIST_NAME" >/dev/null 2>&1 || true
+  fi
+  [[ -f "$PLIST_DEST" ]] && { rm -f "$PLIST_DEST"; ok "removed launchd agent → $PLIST_DEST"; }
+  rm -f "$STATE_DIR/sync-decisions.sh" "$STATE_DIR/daily-backup.sh"
+}
+
+# ---------------------------------------------------------------------------
 # Commands
 # ---------------------------------------------------------------------------
 install() {
@@ -198,10 +252,14 @@ install() {
   done
   ok "hooks → $HOOKS_DIR/"
 
-  # 2b. Drop retired load-profile.sh script if present.
+  # 2b. Drop retired load-profile.sh script + its debug log if present.
   if [[ -f "$HOOKS_DIR/load-profile.sh" ]]; then
     rm -f "$HOOKS_DIR/load-profile.sh"
     ok "removed retired load-profile.sh (replaced by gate.sh)"
+  fi
+  if [[ -f "$STATE_DIR/load-profile-debug.log" ]]; then
+    rm -f "$STATE_DIR/load-profile-debug.log"
+    ok "removed retired load-profile-debug.log"
   fi
 
   # 2c. Armed-flag dir for auto-answer.
@@ -224,6 +282,9 @@ install() {
   # 4. Wire hooks into settings.json (idempotent).
   edit_settings wire
 
+  # 5. Daily backup via launchd (macOS only).
+  install_daily_backup
+
   log ""
   log "Installed."
   if [[ -f "$PROFILE" ]] && grep -q "No rules yet" "$PROFILE" 2>/dev/null; then
@@ -242,11 +303,12 @@ uninstall() {
   log "${BOLD}decision-profile — uninstall${RESET} (hooks only; your data files are kept)"
   log ""
   edit_settings unwire
+  remove_daily_backup
   [[ -d "$HOOKS_DIR" ]] && { rm -rf "$HOOKS_DIR"; ok "removed $HOOKS_DIR/"; }
   [[ -d "$SKILLS_DIR" ]] && { rm -rf "$SKILLS_DIR"; ok "removed $SKILLS_DIR/"; }
   [[ -d "$AUTO_ANSWER_SKILLS_DIR" ]] && { rm -rf "$AUTO_ANSWER_SKILLS_DIR"; ok "removed $AUTO_ANSWER_SKILLS_DIR/"; }
   log ""
-  log "Kept your data: $PROFILE and $STATE_DIR/ (delete manually for a clean slate)."
+  log "Kept your data: $PROFILE, $STATE_DIR/, and backups in $BACKUP_DIR/ (delete manually for a clean slate)."
   log ""
 }
 
@@ -266,6 +328,17 @@ status() {
   settings_has "decision-profile/post-ask.sh"     && status_line "PostToolUse → post-ask.sh" yes        || status_line "PostToolUse → post-ask.sh" no
   settings_has "decision-profile/session-check.sh" && status_line "SessionStart → session-check.sh" yes || status_line "SessionStart → session-check.sh" no
   [[ -f "$PROFILE" ]] && status_line "profile file" yes || status_line "profile file" no
+  if [[ "$(uname -s)" == "Darwin" ]]; then
+    # Capture to a var first: `launchctl list | grep -q` lets grep close the pipe
+    # early, killing launchctl with SIGPIPE → trips `set -o pipefail` → false ✗.
+    local agents=""
+    have launchctl && agents="$(launchctl list 2>/dev/null || true)"
+    if [[ "$agents" == *"$PLIST_NAME"* ]]; then
+      status_line "daily backup (launchd) loaded" yes
+    else
+      status_line "daily backup (launchd) loaded" no
+    fi
+  fi
   log ""
 }
 
