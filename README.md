@@ -19,13 +19,30 @@ curl -fsSL https://raw.githubusercontent.com/rayyone/ry-public-tools/main/instal
 
 ### `setup-mac` — bootstrap a new Mac
 
-Installs the standard toolset (Homebrew, Claude Code, Ghostty, oh-my-zsh,
-powerlevel10k, Zed, zoxide, yazi, and MCP servers). Safe to re-run — it skips
-anything already installed.
+Bootstrap a fresh Mac with the standard toolset. One command, safe to re-run —
+installed tools are skipped.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/rayyone/ry-public-tools/main/install.sh | bash -s -- setup-mac
 ```
+
+After it finishes, restart your terminal (or `source ~/.zshrc`), then run
+`p10k configure` to set up the prompt.
+
+**What it installs**
+
+| Tool | Notes |
+|------|-------|
+| Homebrew | Package manager (installed first; everything else depends on it) |
+| Claude Code | via `npm` if present, else the official installer |
+| Ghostty | Terminal (cask) |
+| oh-my-zsh | Zsh framework (unattended install) |
+| powerlevel10k | Zsh theme — run `p10k configure` after to set up the prompt |
+| Zed | Editor (cask) |
+| zoxide | Smarter `cd` — adds `eval "$(zoxide init zsh)"` to `.zshrc` |
+| yazi | Terminal file manager + previewers (ffmpeg, poppler, imagemagick, nerd font, …) |
+| GitHub MCP | Official remote MCP for Claude Code (auth on first use) |
+| Gmail MCP | Self-hosted `google_workspace_mcp` via `uvx` (needs Google OAuth creds — see below) |
 
 Install only specific pieces (e.g. just Ghostty + Zed):
 
@@ -33,11 +50,30 @@ Install only specific pieces (e.g. just Ghostty + Zed):
 curl -fsSL https://raw.githubusercontent.com/rayyone/ry-public-tools/main/install.sh | bash -s -- setup-mac ghostty zed
 ```
 
-List what `setup-mac` can install:
+List every tool name it can install:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/rayyone/ry-public-tools/main/tools/setup-mac.sh | bash -s -- --list
 ```
+
+**Gmail MCP (self-hosted)** — uses
+[`taylorwilsdon/google_workspace_mcp`](https://github.com/taylorwilsdon/google_workspace_mcp)
+run via `uvx workspace-mcp --tools gmail`. It needs a Google OAuth **client ID
+and secret**. Export them *before* running so the installer picks them up:
+
+```bash
+export GOOGLE_OAUTH_CLIENT_ID=...
+export GOOGLE_OAUTH_CLIENT_SECRET=...
+curl -fsSL https://raw.githubusercontent.com/rayyone/ry-public-tools/main/install.sh | bash -s -- setup-mac
+```
+
+Create the creds in Google Cloud Console → OAuth 2.0 Client (Desktop app). The
+first time you use a Gmail tool in Claude Code, complete the OAuth flow in the
+browser. Without the creds, the Gmail MCP step warns and uses placeholders —
+everything else still installs.
+
+**Requirements** — macOS (Apple Silicon or Intel), internet access, admin
+rights (Homebrew install may prompt for your password).
 
 ### `decision-profile` — fewer interruptions in Claude Code
 
@@ -82,6 +118,31 @@ ry-public-tools/
    `install.sh`.
 3. Add a snippet section to this README.
 4. Commit and push to `main`. The raw URLs are live immediately.
+
+### Add / remove a tool inside `setup-mac.sh`
+
+The script uses one function per tool, registered in the `TOOLS` array.
+
+**Add:**
+1. Write an `install_<name>()` function. Return early if already installed:
+   ```bash
+   install_fzf() {
+     if have fzf; then skip "fzf"; return; fi
+     info "Installing fzf"
+     brew_install fzf
+     ok "fzf"
+   }
+   ```
+2. Add `<name>` to the `TOOLS` array (order = install order; put deps first).
+
+**Remove:** delete the function and its entry in `TOOLS`.
+
+Helpers available inside an installer: `have <cmd>`, `brew_install <formula>`,
+`brew_install_cask <cask>`, `add_to_zshrc '<line>'`, and the output helpers
+`info` / `ok` / `skip` / `warn` / `fail`.
+
+> **Do not commit real OAuth secrets** into the script or this repo. The Gmail
+> OAuth creds are placeholders supplied at runtime via env.
 
 ### Why curl | bash?
 
