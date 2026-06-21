@@ -3,6 +3,18 @@
 Public install scripts for the team. Copy a snippet below, paste it into your
 **Terminal**, press Enter. No setup, no cloning, no manual downloads.
 
+## Quick start
+
+See what's available, then run a tool by name:
+
+```bash
+# List all tools
+curl -fsSL https://raw.githubusercontent.com/rayyone/ry-public-tools/main/install.sh | bash
+
+# Run one
+curl -fsSL https://raw.githubusercontent.com/rayyone/ry-public-tools/main/install.sh | bash -s -- <tool>
+```
+
 ## Available tools
 
 ### `setup-mac` — bootstrap a new Mac
@@ -46,12 +58,6 @@ Check what's installed, or remove the hooks (your data is kept):
 ```bash
 curl -fsSL https://raw.githubusercontent.com/rayyone/ry-public-tools/main/install.sh | bash -s -- decision-profile status
 curl -fsSL https://raw.githubusercontent.com/rayyone/ry-public-tools/main/install.sh | bash -s -- decision-profile uninstall
-```
-
-## List all tools
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/rayyone/ry-public-tools/main/install.sh | bash
 ```
 
 ---
