@@ -69,8 +69,8 @@ Then tell the user auto-answer is off; they'll be asked normally again.
 
 Toggle never-ask mode. Stored as `mode: never-ask` / `mode: normal` in the profile header (`~/.claude/user-decisions-table.md`). Affects only **armed** sessions; the safety floor always holds.
 
-- **on** — in an armed session, LOW-confidence routine questions are decided silently (and logged to `low-confident-answers-log.md`) instead of interrupting.
-- **off** — LOW-confidence questions are asked normally again.
+- **on** — in an armed session, MEDIUM- and LOW-confidence routine questions are decided silently (and logged to `low-confident-answers-log.md`) instead of interrupting.
+- **off** — MEDIUM- and LOW-confidence questions are asked normally again.
 
 Edit the header line in place (Bash, no Edit/Write diff noise):
 
@@ -134,8 +134,8 @@ The profile is **split**: the hot file holds only Principles + Decision Style + 
 **Never output internal match-reasoning.** Do not narrate which row matched, which domain, or what confidence. Skip straight to the ⚡ output block (auto-answered) or the `AskUserQuestion` call (genuine re-ask). The user only needs the outcome.
 
 - **HIGH confidence match** → auto-answer silently. Do **not** call AskUserQuestion. Emit ⚡ output (format below).
-- **MEDIUM confidence match** → in normal mode: suggest the predicted answer and ask a short confirm, emitting the suggestion as ⚡ output. In never-ask mode: decide silently, emit ⚡ output, log to `low-confident-answers-log.md`.
-- **No matching row** → fall back to `## Decision Principles`. If a principle clearly resolves the question and it is **not** under the safety floor, auto-answer and emit ⚡ output. If the principles only lean (don't decide cleanly), treat as MEDIUM and confirm. If neither row nor principle applies, or it's high-stakes → ask normally.
+- **MEDIUM confidence match** → in normal mode: ask normally (call AskUserQuestion). In never-ask mode: decide silently, emit ⚡ output, log to `low-confident-answers-log.md`.
+- **No matching row** → fall back to `## Decision Principles`. If a principle clearly resolves the question and it is **not** under the safety floor, auto-answer and emit ⚡ output. If the principles only lean (don't decide cleanly), treat as MEDIUM and ask normally. If neither row nor principle applies, or it's high-stakes → ask normally.
 - **LOW confidence / high-stakes** → in normal mode: ask normally. In never-ask mode: decide silently, emit ⚡ output, log to `low-confident-answers-log.md`.
 
 Precedence, in order: **`auto_decide: off` (skip all, always ask) → safety floor (always ask) → matched table row (by its Conf) → Decision Principles → ask.** A row always beats a principle; a principle beats asking only when it resolves the question and the safety floor is clear.

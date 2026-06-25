@@ -61,7 +61,7 @@ This skill does not collect preferences; it models **how the user decides**. Eve
 |---|---|---|---|---|
 | **Trade-off axis** | MAUT / preference elicitation | Where the user lands when two goods conflict (speed↔safety, breadth↔depth, cost↔correctness, velocity↔polish) | Force a pick between two genuinely-good options under a concrete trigger | `Decide` = which side wins, `When` = the trigger that forces the trade-off |
 | **Means→ends** | Keeney, Value-Focused Thinking | The *fundamental objective* behind a surface choice — ask "why does that matter?" until it bottoms out | "Why is that important to you?" laddered up from a concrete choice | `Decide` encodes the **end**, not the surface pick, so it generalizes to new surfaces |
-| **Engagement style** | Scott & Bruce, GDMS | How the user wants to be involved: decide-for-me / recommend-then-confirm / follow-convention / always-ask | "When X happens, do you want me to just do it, suggest + confirm, or always ask?" | Sets the rule's **Conf** directly (decide-for-me→HIGH, recommend→MEDIUM, always-ask→LOW) |
+| **Engagement style** | Scott & Bruce, GDMS | How the user wants to be involved: decide-for-me / want-a-say / follow-convention / always-ask | "When X happens, do you want me to just do it, or be asked?" | Sets the rule's **Conf** directly (decide-for-me→HIGH, want-a-say→MEDIUM, always-ask→LOW; MEDIUM asks in normal mode) |
 | **Stopping rule** | Maximizer vs. satisficer (Schwartz) | Optimal-or-bust vs. good-enough; how much search before committing | "Good-enough-and-ship, or keep optimizing until best?" | Calibrates auto-decide aggressiveness; recorded as a rule and as profile-wide default |
 | **Threshold / trigger** | Value-Focused Thinking (objectives → measurable attributes) | The concrete, recognizable condition that flips the decision | "At what point does this stop being fine?" (>10 files, CVE with no patch, p95 > 200ms) | Becomes a sharp, testable `When` cell instead of a vague situation |
 | **Stakeholder view** | Keeney device | Whose interest the user optimizes for when they conflict (user / team / future-maintainer / customer) | "When these parties pull apart, whose call wins?" | `Decide` names the winning stakeholder; `Why` records the others |
@@ -105,7 +105,7 @@ The profile is digested daily by `update`, so without a ceiling it balloons. But
 
 - **When** — the trigger condition (Threshold lens makes this sharp).
 - **Decide** — the rule-shaped action/choice (for Means→ends, write the *end*).
-- **Conf** — HIGH = auto-decide silently · MEDIUM = suggest + confirm · LOW = ask. Engagement-style + Stopping-rule answers set this.
+- **Conf** — HIGH = auto-decide silently · MEDIUM = ask (auto-decided only in never-ask mode) · LOW = ask. Engagement-style + Stopping-rule answers set this. (Runtime: in normal mode only HIGH auto-answers; MEDIUM and LOW both ask. never-ask mode auto-decides all three below the safety floor.)
 - **Lens** — which lens(es) this rule encodes (e.g. `trade-off`, `means-ends`, `engagement`, `stopping`, `threshold`, `stakeholder`). Makes the technique persist into the table so `update`/`review`/dedup can reason on it.
 - **Why** — the fundamental objective or reason; for trade-offs, what was traded away.
 
@@ -165,7 +165,7 @@ If `role:` is already set, skip this bootstrap and go directly to the batch.
    - **When** ← the trigger from the question (sharpen it via the threshold lens).
    - **Decide** ← the rule-shaped action. For **means→ends** questions, write the *fundamental objective* the answer revealed (the "why"), not the surface option — so it generalizes.
    - **Lens** ← the lens the question targeted (carry it through verbatim).
-   - **Conf** ← set from the **engagement-style / stopping-rule** signal: decide-for-me / optimal-is-not-required → HIGH; recommend-then-confirm → MEDIUM; always-ask / conditional → LOW. Absent that signal, HIGH when unambiguous + broadly applicable, MEDIUM when conditional.
+   - **Conf** ← set from the **engagement-style / stopping-rule** signal: decide-for-me / optimal-is-not-required → HIGH; want-a-say / conditional-involvement → MEDIUM; always-ask / conditional → LOW. Absent that signal, HIGH when unambiguous + broadly applicable, MEDIUM when conditional. (Reminder: MEDIUM asks in normal mode — reserve HIGH for rules safe to auto-answer unattended.)
    - **Why** ← fundamental objective, or what was traded away.
    - **Honor the per-domain caps (soft ~25 / hard ~40): merge-first, evict only over hard** (see **Size discipline**). If a domain doesn't clearly fit, write to the `general` shard.
    - **Refresh `## Decision Principles`** (hot file). After adding the batch's rows, scan for a posture that now recurs across ≥3 rows in different domains (same trade-off side, same stakeholder winning, same stopping rule). If it isn't already a principle, lift it into a one-sentence bullet. If a new high-Conf rule contradicts an existing principle, fix the principle. Keep the block ≤10 bullets — merge or drop the weakest before exceeding.
