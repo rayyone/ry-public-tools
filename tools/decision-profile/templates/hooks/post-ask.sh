@@ -29,9 +29,20 @@ const input    = payload.tool_input    || {};
 const response = payload.tool_response || {};
 
 const questions = input.questions || [];
-const answers   = response.answers || {};
+
+// Skip dismissed/unanswered prompts. When the user closes the prompt without
+// picking, Claude Code returns the string "The user did not answer the
+// questions." (and no answers object). Logging those produced junk rows with
+// empty/null answers in user-manual-decided-log.md.
+const noAnswer =
+  typeof response === 'string'
+    ? /did not answer/i.test(response)
+    : (typeof response.content === 'string' && /did not answer/i.test(response.content));
+
+const answers = (response && typeof response === 'object' && response.answers) || {};
 
 if (!questions.length) process.exit(0);
+if (noAnswer || !Object.keys(answers).length) process.exit(0);
 
 const ts = new Date().toISOString().replace(/\.\d+Z$/, 'Z');
 
